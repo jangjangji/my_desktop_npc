@@ -143,18 +143,46 @@
                         <i class="fas fa-calendar-alt me-2"></i>오늘의 일정
                     </h2>
                     <p class="text-muted mb-4" id="current-date"></p>
+
+                    <!-- 일정 추가 버튼 -->
+                    <button class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="fas fa-plus me-2"></i>새 일정 추가
+                    </button>
                     
-                    <div class="row">
+                    <div class="row" id="events-container">
                         {% if events and events != "오늘 일정은 없습니다." %}
                             {% for event in events %}
-                            <div class="col-12">
-                                <div class="card">
+                            <div class="col-12 event-item" data-event-id="{{ event.id }}">
+                                <div class="card" style="border-left: 5px solid {{ event.color }};">
                                     <div class="card-body">
-                                        <h5 class="card-title">{{ event.title }}</h5>
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h5 class="card-title mb-0">{{ event.title }}</h5>
+                                            <div>
+                                                <span class="badge" style="background-color: {{ event.color }}">
+                                                    {{ event.calendar_name }}
+                                                </span>
+                                                <button class="btn btn-sm btn-outline-primary ms-2" 
+                                                        onclick="editEvent('{{ event.calendar_id }}', '{{ event.id }}')">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger ms-1" 
+                                                        onclick="deleteEvent('{{ event.calendar_id }}', '{{ event.id }}')">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                         <p class="card-text">
                                             <i class="far fa-clock me-2"></i>
-                                            <span class="event-time">{{ event.time }}</span>
+                                            <span class="event-time">
+                                                시작: {{ event.start_time }}<br>
+                                                종료: {{ event.end_time }}
+                                            </span>
                                         </p>
+                                        {% if event.description %}
+                                        <p class="card-text text-muted">
+                                            <small>{{ event.description }}</small>
+                                        </p>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -201,6 +229,106 @@
         <div class="text-center">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2">로딩 중...</p>
+        </div>
+    </div>
+
+    <!-- 일정 추가 모달 -->
+    <div class="modal fade" id="addEventModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">새 일정 추가</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="eventForm">
+                        <div class="mb-3">
+                            <label class="form-label">캘린더 선택</label>
+                            <select class="form-select" id="calendarSelect">
+                                {% for calendar in calendars %}
+                                <option value="{{ calendar.id }}" style="background-color: {{ calendar.backgroundColor }}">
+                                    {{ calendar.summary }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">일정 제목</label>
+                            <input type="text" class="form-control" id="eventTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">시작 시간</label>
+                            <input type="datetime-local" class="form-control" id="eventStart" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">종료 시간</label>
+                            <input type="datetime-local" class="form-control" id="eventEnd" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">장소 (선택사항)</label>
+                            <input type="text" class="form-control" id="eventLocation">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">설명 (선택사항)</label>
+                            <textarea class="form-control" id="eventDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">참석자 이메일 (선택사항, 쉼표로 구분)</label>
+                            <input type="text" class="form-control" id="eventAttendees" placeholder="example1@gmail.com, example2@gmail.com">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-primary" onclick="addEvent()">추가</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 일정 수정 모달 -->
+    <div class="modal fade" id="editEventModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">일정 수정</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editEventForm">
+                        <input type="hidden" id="editEventId">
+                        <input type="hidden" id="editCalendarId">
+                        <div class="mb-3">
+                            <label class="form-label">일정 제목</label>
+                            <input type="text" class="form-control" id="editEventTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">시작 시간</label>
+                            <input type="datetime-local" class="form-control" id="editEventStart" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">종료 시간</label>
+                            <input type="datetime-local" class="form-control" id="editEventEnd" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">장소 (선택사항)</label>
+                            <input type="text" class="form-control" id="editEventLocation">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">설명 (선택사항)</label>
+                            <textarea class="form-control" id="editEventDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">참석자 이메일 (선택사항, 쉼표로 구분)</label>
+                            <input type="text" class="form-control" id="editEventAttendees" placeholder="example1@gmail.com, example2@gmail.com">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-primary" onclick="updateEvent()">수정</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -252,6 +380,244 @@
                 })
                 .finally(() => {
                     loading.style.display = 'none';
+                });
+        }
+
+        // 이벤트 HTML 생성 함수
+        function createEventHtml(event) {
+            return `
+                <div class="col-12 event-item" data-event-id="${event.id}">
+                    <div class="card" style="border-left: 5px solid ${event.color};">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title mb-0">${event.title}</h5>
+                                <div>
+                                    <span class="badge" style="background-color: ${event.color}">
+                                        ${event.calendar_name}
+                                    </span>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" 
+                                            onclick="editEvent('${event.calendar_id}', '${event.id}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" 
+                                            onclick="deleteEvent('${event.calendar_id}', '${event.id}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="card-text">
+                                <i class="far fa-clock me-2"></i>
+                                <span class="event-time">
+                                    시작: ${new Date(event.start_time).toLocaleString()}<br>
+                                    종료: ${new Date(event.end_time).toLocaleString()}
+                                </span>
+                            </p>
+                            ${event.description ? `
+                            <p class="card-text text-muted">
+                                <small>${event.description}</small>
+                            </p>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 이벤트 목록 새로고침
+        function refreshEvents() {
+            fetch('/calendar/today')
+                .then(response => response.json())
+                .then(data => {
+                    const eventsContainer = document.getElementById('events-container');
+                    if (Array.isArray(data)) {
+                        if (data.length === 0) {
+                            eventsContainer.innerHTML = `
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-body text-center">
+                                            <i class="far fa-calendar-check fa-3x mb-3 text-muted"></i>
+                                            <p class="card-text">오늘은 예정된 일정이 없습니다.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            eventsContainer.innerHTML = data.map(event => createEventHtml(event)).join('');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching events:', error);
+                });
+        }
+
+        // 일정 수정
+        function updateEvent() {
+            const eventId = document.getElementById('editEventId').value;
+            const calendarId = document.getElementById('editCalendarId').value;
+            const title = document.getElementById('editEventTitle').value;
+            const start = document.getElementById('editEventStart').value;
+            const end = document.getElementById('editEventEnd').value;
+            const location = document.getElementById('editEventLocation').value;
+            const description = document.getElementById('editEventDescription').value;
+            const attendeesInput = document.getElementById('editEventAttendees').value;
+            const attendees = attendeesInput ? attendeesInput.split(',').map(email => email.trim()) : [];
+
+            if (!title || !start || !end) {
+                alert('제목, 시작 시간, 종료 시간은 필수입니다.');
+                return;
+            }
+
+            const startTime = new Date(start).toISOString();
+            const endTime = new Date(end).toISOString();
+
+            fetch(`/calendar/update/${calendarId}/${eventId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: title,
+                    start_time: startTime,
+                    end_time: endTime,
+                    location: location,
+                    description: description,
+                    attendees: attendees
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editEventModal'));
+                    modal.hide();
+                    refreshEvents(); // 이벤트 목록 새로고침
+                } else {
+                    alert('일정 수정 실패: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('일정 수정 중 오류가 발생했습니다: ' + error.message);
+                console.error('Error:', error);
+            });
+        }
+
+        // 일정 삭제
+        function deleteEvent(calendarId, eventId) {
+            if (confirm('정말로 이 일정을 삭제하시겠습니까?')) {
+                fetch(`/calendar/delete/${calendarId}/${eventId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        refreshEvents(); // 이벤트 목록 새로고침
+                    } else {
+                        alert('일정 삭제 실패: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('일정 삭제 중 오류가 발생했습니다: ' + error.message);
+                    console.error('Error:', error);
+                });
+            }
+        }
+
+        // 일정 추가
+        function addEvent() {
+            const calendarId = document.getElementById('calendarSelect').value;
+            const title = document.getElementById('eventTitle').value;
+            const start = document.getElementById('eventStart').value;
+            const end = document.getElementById('eventEnd').value;
+            const location = document.getElementById('eventLocation').value;
+            const description = document.getElementById('eventDescription').value;
+            const attendeesInput = document.getElementById('eventAttendees').value;
+            const attendees = attendeesInput ? attendeesInput.split(',').map(email => email.trim()) : [];
+
+            if (!title || !start || !end) {
+                alert('제목, 시작 시간, 종료 시간은 필수입니다.');
+                return;
+            }
+
+            // ISO 형식으로 변환
+            const startTime = new Date(start).toISOString();
+            const endTime = new Date(end).toISOString();
+
+            fetch('/calendar/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    calendar_id: calendarId,
+                    title: title,
+                    start_time: startTime,
+                    end_time: endTime,
+                    location: location,
+                    description: description,
+                    attendees: attendees
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addEventModal'));
+                    modal.hide();
+                    refreshEvents(); // 이벤트 목록 새로고침
+                } else {
+                    alert('일정 추가 실패: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('일정 추가 중 오류가 발생했습니다.');
+                console.error('Error:', error);
+            });
+        }
+
+        // 일정 수정 모달 열기
+        function editEvent(calendarId, eventId) {
+            console.log('수정 요청:', calendarId, eventId);  // 디버깅용 로그 추가
+            fetch(`/calendar/event/${calendarId}/${eventId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('editEventId').value = eventId;
+                        document.getElementById('editCalendarId').value = calendarId;
+                        document.getElementById('editEventTitle').value = data.title;
+                        
+                        // ISO 문자열을 로컬 datetime-local 형식으로 변환
+                        const startDate = new Date(data.start);
+                        const endDate = new Date(data.end);
+                        document.getElementById('editEventStart').value = startDate.toISOString().slice(0, 16);
+                        document.getElementById('editEventEnd').value = endDate.toISOString().slice(0, 16);
+                        
+                        document.getElementById('editEventLocation').value = data.location || '';
+                        document.getElementById('editEventDescription').value = data.description || '';
+                        document.getElementById('editEventAttendees').value = data.attendees ? data.attendees.join(', ') : '';
+                        
+                        const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
+                        modal.show();
+                    } else {
+                        alert('일정 정보를 가져오는데 실패했습니다: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('일정 정보를 가져오는 중 오류가 발생했습니다: ' + error.message);
+                    console.error('Error:', error);
                 });
         }
     </script>
