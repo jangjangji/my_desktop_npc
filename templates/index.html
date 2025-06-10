@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI 뉴스 요약 | 실시간 뉴스 분석</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #3b82f6;
+            --text-color: #1f2937;
+            --bg-color: #f8fafc;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 100px 0;
+            color: white;
+            margin-bottom: 50px;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .summary-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 50px;
+        }
+
+        .summary-content {
+            min-height: 200px;
+            background-color: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .news-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            position: relative;
+        }
+
+        .news-card:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 10%;
+            width: 80%;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e2e8f0, transparent);
+        }
+
+        .news-card:not(:last-child) {
+            padding-bottom: 30px;
+        }
+
+        .news-card .news-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .news-card .news-content {
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .news-card .news-meta {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .news-source {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .news-time {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 12px 24px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .footer {
+            background-color: white;
+            padding: 40px 0;
+            margin-top: 100px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .animate-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        .summary-list {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 네비게이션 바 -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-robot me-2"></i>AI 뉴스 요약
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">기능</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#summary">요약</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#about">소개</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 히어로 섹션 -->
+    <section class="hero-section">
+        <div class="container text-center">
+            <h1 class="hero-title">AI로 실시간 뉴스를 스마트하게</h1>
+            <p class="hero-subtitle">최신 인공지능 기술로 뉴스의 핵심을 빠르게 파악하세요</p>
+            <button class="btn btn-light btn-lg" onclick="scrollToSummary()">
+                시작하기 <i class="fas fa-arrow-right ms-2"></i>
+            </button>
+        </div>
+    </section>
+
+    <!-- 메인 컨텐츠 -->
+    <div class="main-container">
+        <!-- 기능 소개 -->
+        <section id="features" class="py-5">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <i class="fas fa-bolt feature-icon"></i>
+                        <h3>실시간 분석</h3>
+                        <p>최신 뉴스를 실시간으로 분석하여 핵심 내용을 추출합니다.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <i class="fas fa-brain feature-icon"></i>
+                        <h3>AI 기술</h3>
+                        <p>최신 AI 기술을 활용하여 정확하고 신뢰성 있는 요약을 제공합니다.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <i class="fas fa-clock feature-icon"></i>
+                        <h3>시간 절약</h3>
+                        <p>긴 기사를 읽는 대신 핵심 내용만 빠르게 파악하세요.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 섹션 -->
+        <section id="summary" class="summary-section">
+            <h2 class="text-center mb-4">뉴스 요약</h2>
+            <div class="d-grid gap-2 col-md-6 mx-auto">
+                <button class="btn btn-primary btn-lg" onclick="fetchSummary()">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    <span>요약 가져오기</span>
+                    <span class="spinner-border spinner-border-sm ms-2 d-none" role="status" id="loading-spinner"></span>
+                </button>
+            </div>
+            <div class="summary-content" id="output">
+                <div class="text-center text-muted">
+                    <i class="fas fa-newspaper fs-1 mb-3"></i>
+                    <p>버튼을 클릭하여 뉴스 요약을 시작하세요.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 로딩 오버레이 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+            <p class="mt-3">요약 중입니다...</p>
+        </div>
+    </div>
+
+    <!-- 푸터 -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>AI 뉴스 요약</h5>
+                    <p class="text-muted">최신 AI 기술로 뉴스를 스마트하게 요약하는 서비스</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="text-muted">&copy; 2024 AI 뉴스 요약. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function scrollToSummary() {
+            document.getElementById('summary').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function fetchSummary() {
+            const spinner = document.getElementById('loading-spinner');
+            const button = document.querySelector('.btn-primary');
+            const output = document.getElementById('output');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            
+            spinner.classList.remove('d-none');
+            button.disabled = true;
+            loadingOverlay.style.display = 'flex';
+            
+            fetch("/summarize")
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('서버 오류가 발생했습니다.');
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    const summaries = Array.isArray(data.summary) ? data.summary : [data.summary];
+                    output.innerHTML = `
+                        <div class="mb-4 d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                최근 업데이트: ${new Date().toLocaleString()}
+                            </small>
+                            <small class="text-muted">
+                                <i class="fas fa-newspaper me-1"></i>
+                                총 ${summaries.length}개의 기사
+                            </small>
+                        </div>
+                        <div class="summary-list">
+                            ${summaries.map((summary, index) => `
+                                <div class="news-card">
+                                    <div class="news-meta">
+                                        <div class="news-source">
+                                            <i class="fas fa-bookmark"></i>
+                                            <strong>기사 ${index + 1}</strong>
+                                        </div>
+                                        <div class="news-time">
+                                            <i class="fas fa-history"></i>
+                                            방금 전
+                                        </div>
+                                    </div>
+                                    <div class="news-content">
+                                        ${summary.split('\n').join('<br>')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    output.innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            ${error.message}
+                        </div>
+                    `;
+                })
+                .finally(() => {
+                    spinner.classList.add('d-none');
+                    button.disabled = false;
+                    loadingOverlay.style.display = 'none';
+                });
+        }
+
+        // 스크롤 시 네비게이션 바 스타일 변경
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+                navbar.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+            } else {
+                navbar.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+                navbar.style.boxShadow = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
+
