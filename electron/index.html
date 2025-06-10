@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI 뉴스 요약</title>
+</head>
+<body>
+  <h1>AI 뉴스 요약</h1>
+  <button onclick="fetchSummary()">요약 가져오기</button>
+  <pre id="output"></pre>
+
+  <script>
+    function fetchSummary() {
+      fetch("/summarize")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("output").innerText = data.summary;
+        });
+    }
+  </script>
+</body>
+</html>
+
