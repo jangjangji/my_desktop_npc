@@ -1,11 +1,40 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
+import os
 from calendar_utils import (
     get_today_events, create_calendar_event, get_calendar_list,
     update_calendar_event, delete_calendar_event, get_event_details
 )
 from news_briefing import fetch_and_summarize_rss
+from meeting_handler import process_meeting_notes
 
 app = Flask(__name__)
+app.jinja_env.auto_reload = True
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# 루트 폴더와 static 폴더 경로 설정
+ROOT_FOLDER = os.path.dirname(os.path.abspath(__file__))
+STATIC_FOLDER = os.path.join(ROOT_FOLDER, 'static')
+
+# 서비스 워커 헤더 설정
+@app.after_request
+def add_header(response):
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+@app.route('/sw.js')
+def service_worker():
+    """루트 경로에 있는 서비스 워커 파일을 서빙합니다."""
+    response = send_from_directory(ROOT_FOLDER, 'sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """static 파일을 서빙합니다."""
+    return send_from_directory(STATIC_FOLDER, filename)
 
 @app.route('/')
 def index():
@@ -133,6 +162,28 @@ def get_today_events_api():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/meeting')
+def meeting():
+    return render_template('meeting.html')
+
+@app.route('/process_meeting_notes', methods=['POST'])
+def handle_meeting_notes():
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({
+                'status': 'error',
+                'message': '회의록 내용이 없습니다.'
+            }), 400
+            
+        result = process_meeting_notes(data['text'])
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5005)
-

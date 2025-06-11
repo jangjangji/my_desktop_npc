@@ -1,17 +1,21 @@
 from __future__ import print_function
-import datetime
+from datetime import datetime, timezone, timedelta
 import os.path
 import pickle
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import pytz
 
 # Google Calendar 읽기/쓰기 권한
 SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/calendar'
 ]
+
+# 한국 시간대 설정
+KST = pytz.timezone('Asia/Seoul')
 
 def get_calendar_service():
     creds = None
@@ -37,10 +41,14 @@ def get_calendar_service():
 def get_today_events():
     service = get_calendar_service()
 
-    # 오늘 00:00~23:59 (UTC 기준) 일정 조회 범위 설정
-    now = datetime.datetime.utcnow()
-    start = datetime.datetime(now.year, now.month, now.day, 0, 0).isoformat() + 'Z'
-    end = datetime.datetime(now.year, now.month, now.day, 23, 59).isoformat() + 'Z'
+    # 오늘 00:00~23:59 (KST 기준) 일정 조회 범위 설정
+    now = datetime.now(KST)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    # UTC로 변환
+    start = start.astimezone(pytz.UTC)
+    end = end.astimezone(pytz.UTC)
 
     # 캘린더 목록 가져오기
     calendar_colors = {}
@@ -54,8 +62,8 @@ def get_today_events():
     # 일정 요청
     events_result = service.events().list(
         calendarId='primary',
-        timeMin=start,
-        timeMax=end,
+        timeMin=start.isoformat(),
+        timeMax=end.isoformat(),
         singleEvents=True,
         orderBy='startTime'
     ).execute()
@@ -65,19 +73,45 @@ def get_today_events():
     if not events:
         return "오늘 일정은 없습니다."
 
-    return [
-        {
+    def format_event_time(time_str):
+        if not time_str:
+            return None
+        # UTC 시간을 KST로 변환
+        dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+        dt_kst = dt.astimezone(KST)
+        return dt_kst.isoformat()
+
+    formatted_events = []
+    for event in events:
+        # 알림 설정 가져오기
+        reminder_minutes = 10  # 기본값
+        if 'reminders' in event:
+            if not event['reminders'].get('useDefault', True):
+                overrides = event['reminders'].get('overrides', [])
+                if overrides:
+                    # 팝업 알림 설정 찾기
+                    for override in overrides:
+                        if override.get('method') == 'popup':
+                            reminder_minutes = override.get('minutes', 10)
+                            break
+            # 기본 알림 설정 사용
+            else:
+                reminder_minutes = 10
+
+        formatted_event = {
             "id": event['id'],
             "title": event.get("summary", "제목 없음"),
-            "start_time": event['start'].get('dateTime', event['start'].get('date')),
-            "end_time": event['end'].get('dateTime', event['end'].get('date')),
+            "start_time": format_event_time(event['start'].get('dateTime', event['start'].get('date'))),
+            "end_time": format_event_time(event['end'].get('dateTime', event['end'].get('date'))),
             "description": event.get("description", ""),
             "calendar_id": event.get("organizer", {}).get("email", "primary"),
             "calendar_name": calendar_colors.get(event.get("organizer", {}).get("email", "primary"), {}).get("summary", "기본 캘린더"),
-            "color": calendar_colors.get(event.get("organizer", {}).get("email", "primary"), {}).get("backgroundColor", "#039BE5")
+            "color": calendar_colors.get(event.get("organizer", {}).get("email", "primary"), {}).get("backgroundColor", "#039BE5"),
+            "reminder_minutes": reminder_minutes
         }
-        for event in events
-    ]
+        formatted_events.append(formatted_event)
+
+    return formatted_events
 
 def get_calendar_list():
     """사용 가능한 모든 캘린더 목록을 가져옵니다."""
@@ -102,96 +136,116 @@ def get_calendar_list():
         print(f"캘린더 목록 가져오기 실패: {str(e)}")
         return []
 
-def create_calendar_event(calendar_id, title, start_time, end_time, description=None, attendees=None, location=None):
-    """지정된 캘린더에 새 일정을 추가합니다.
-    
-    Args:
-        calendar_id (str): 캘린더 ID
-        title (str): 일정 제목
-        start_time (str): 시작 시간 (ISO 형식: YYYY-MM-DDTHH:MM:SS)
-        end_time (str): 종료 시간 (ISO 형식: YYYY-MM-DDTHH:MM:SS)
-        description (str, optional): 일정 설명
-        attendees (list, optional): 참석자 이메일 목록
-        location (str, optional): 장소
-    
-    Returns:
-        dict: 생성된 일정 정보
-    """
-    service = get_calendar_service()
-    
-    event = {
-        'summary': title,
-        'start': {
-            'dateTime': start_time,
-            'timeZone': 'Asia/Seoul',
-        },
-        'end': {
-            'dateTime': end_time,
-            'timeZone': 'Asia/Seoul',
-        },
-    }
-    
-    if description:
-        event['description'] = description
-    
-    if location:
-        event['location'] = location
-    
-    if attendees:
-        event['attendees'] = [{'email': email} for email in attendees]
-        event['guestsCanModify'] = True  # 참석자가 일정을 수정할 수 있도록 설정
-    
+def create_calendar_event(calendar_id='primary', title=None, start_time=None, end_time=None, 
+                        description=None, location=None, attendees=None, reminder_minutes=10):
+    """캘린더에 새 일정을 추가합니다."""
     try:
-        event = service.events().insert(calendarId=calendar_id, body=event, sendUpdates='all').execute()
+        service = get_calendar_service()
+        
+        # 시간 문자열이 ISO 형식인지 확인하고 처리
+        if isinstance(start_time, str):
+            start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        if isinstance(end_time, str):
+            end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            
+        # 시간이 과거인 경우 현재 시간 + 1분으로 조정
+        now = datetime.now(timezone.utc)
+        if start_time < now:
+            start_time = now + timedelta(minutes=1)
+            end_time = start_time + timedelta(minutes=30)
+            
+        # 종료 시간이 시작 시간보다 이전인 경우 수정
+        if end_time <= start_time:
+            end_time = start_time + timedelta(minutes=30)
+
+        event = {
+            'summary': title,
+            'description': description,
+            'start': {
+                'dateTime': start_time.isoformat(),
+                'timeZone': 'Asia/Seoul'
+            },
+            'end': {
+                'dateTime': end_time.isoformat(),
+                'timeZone': 'Asia/Seoul'
+            }
+        }
+
+        if location:
+            event['location'] = location
+
+        if attendees:
+            event['attendees'] = [{'email': attendee} for attendee in attendees]
+
+        # 알림 설정
+        event['reminders'] = {
+            'useDefault': False,
+            'overrides': [
+                {'method': 'popup', 'minutes': reminder_minutes}
+            ]
+        }
+
+        print('일정 생성 요청:', event)  # 디버깅용 로그
+
+        event = service.events().insert(
+            calendarId=calendar_id,
+            body=event,
+            sendUpdates='all'
+        ).execute()
+
         return {
             'success': True,
             'id': event['id'],
-            'title': event['summary'],
-            'start': event['start']['dateTime'],
-            'end': event['end']['dateTime'],
-            'calendar_id': calendar_id
+            'htmlLink': event['htmlLink']
         }
+
     except Exception as e:
+        print('일정 생성 중 오류:', str(e))  # 디버깅용 로그
         return {
             'success': False,
             'error': str(e)
         }
 
-def update_calendar_event(calendar_id, event_id, title=None, start_time=None, end_time=None, description=None, attendees=None, location=None):
-    """기존 일정을 수정합니다.
-    
-    Args:
-        calendar_id (str): 캘린더 ID
-        event_id (str): 수정할 일정 ID
-        title (str, optional): 수정할 일정 제목
-        start_time (str, optional): 수정할 시작 시간 (ISO 형식)
-        end_time (str, optional): 수정할 종료 시간 (ISO 형식)
-        description (str, optional): 수정할 일정 설명
-        attendees (list, optional): 수정할 참석자 이메일 목록
-        location (str, optional): 수정할 장소
-    
-    Returns:
-        dict: 수정된 일정 정보
-    """
+def update_calendar_event(calendar_id, event_id, title=None, start_time=None, end_time=None, description=None, attendees=None, location=None, reminder_minutes=None):
     service = get_calendar_service()
     
     try:
-        # 기존 일정 정보 가져오기
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
         
-        # 수정할 필드만 업데이트
+        if start_time:
+            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            if not start_dt.tzinfo:
+                start_dt = KST.localize(start_dt)
+            event['start'] = {
+                'dateTime': start_dt.isoformat(),
+                'timeZone': 'Asia/Seoul'
+            }
+        
+        if end_time:
+            end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            if not end_dt.tzinfo:
+                end_dt = KST.localize(end_dt)
+            event['end'] = {
+                'dateTime': end_dt.isoformat(),
+                'timeZone': 'Asia/Seoul'
+            }
+        
         if title:
             event['summary'] = title
-        if start_time:
-            event['start']['dateTime'] = start_time
-        if end_time:
-            event['end']['dateTime'] = end_time
-        if description is not None:  # 빈 문자열도 허용
+        if description is not None:
             event['description'] = description
         if location is not None:
             event['location'] = location
         if attendees is not None:
             event['attendees'] = [{'email': email} for email in attendees]
+        if reminder_minutes is not None:
+            event['reminders'] = {
+                'useDefault': False,
+                'overrides': [
+                    {'method': 'popup', 'minutes': int(reminder_minutes)},
+                    {'method': 'email', 'minutes': int(reminder_minutes)}
+                ]
+            }
         
         updated_event = service.events().update(
             calendarId=calendar_id,
@@ -200,14 +254,18 @@ def update_calendar_event(calendar_id, event_id, title=None, start_time=None, en
             sendUpdates='all'
         ).execute()
         
+        print(f"수정된 이벤트 시간: 시작={updated_event['start']['dateTime']}, 종료={updated_event['end']['dateTime']}")
+        
         return {
             'success': True,
             'id': updated_event['id'],
             'title': updated_event['summary'],
             'start': updated_event['start']['dateTime'],
-            'end': updated_event['end']['dateTime']
+            'end': updated_event['end']['dateTime'],
+            'reminder_minutes': reminder_minutes if reminder_minutes is not None else None
         }
     except Exception as e:
+        print(f"일정 수정 중 오류: {str(e)}")
         return {
             'success': False,
             'error': str(e)
@@ -238,30 +296,36 @@ def delete_calendar_event(calendar_id, event_id):
         }
 
 def get_event_details(calendar_id, event_id):
-    """특정 일정의 상세 정보를 가져옵니다.
-    
-    Args:
-        calendar_id (str): 캘린더 ID
-        event_id (str): 일정 ID
-    
-    Returns:
-        dict: 일정 상세 정보
-    """
+    """특정 일정의 상세 정보를 가져옵니다."""
     service = get_calendar_service()
     
     try:
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+        
+        # 시간 정보를 KST로 변환
+        start_time = event['start'].get('dateTime', event['start'].get('date'))
+        end_time = event['end'].get('dateTime', event['end'].get('date'))
+        
+        if start_time:
+            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(KST)
+            start_time = start_dt.isoformat()
+        if end_time:
+            end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(KST)
+            end_time = end_dt.isoformat()
+            
         return {
             'success': True,
             'id': event['id'],
             'title': event.get('summary', ''),
-            'start': event['start'].get('dateTime', event['start'].get('date')),
-            'end': event['end'].get('dateTime', event['end'].get('date')),
+            'start': start_time,
+            'end': end_time,
             'description': event.get('description', ''),
             'location': event.get('location', ''),
-            'attendees': [attendee['email'] for attendee in event.get('attendees', [])]
+            'attendees': [attendee['email'] for attendee in event.get('attendees', [])],
+            'reminder_minutes': event.get('reminders', {}).get('overrides', [{}])[0].get('minutes', 10)
         }
     except Exception as e:
+        print(f"일정 상세 정보 조회 중 오류: {str(e)}")
         return {
             'success': False,
             'error': str(e)

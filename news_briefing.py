@@ -11,7 +11,7 @@ def extract_main_text_from_html(html):
 
 def fetch_and_summarize_rss(rss_url, limit=5):
     feed = feedparser.parse(rss_url)
-    print(f"📥 총 {len(feed.entries)}개 기사 발견됨\n")
+    print(f"총 {len(feed.entries)}개 기사 발견됨\n")
     result = []
 
     for entry in feed.entries[:limit]:
