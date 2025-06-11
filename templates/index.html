@@ -108,12 +108,16 @@
         .btn-primary {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             border: none;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            color: white;
+            transition: all 0.3s ease;
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .badge {
@@ -178,6 +182,12 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+
+        .action-buttons {
+            margin-top: 2rem;
+            display: flex;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
@@ -193,13 +203,15 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/news">
-                            <i class="fas fa-newspaper me-1"></i>뉴스
+                        <a href="/news" class="nav-link">
+                            <i class="fas fa-newspaper"></i>
+                            <span>뉴스</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/meeting">
-                            <i class="fas fa-file-alt me-1"></i>회의록 정리
+                        <a href="/meetings" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>회의록</span>
                         </a>
                     </li>
                 </ul>

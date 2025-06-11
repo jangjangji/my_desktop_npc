@@ -1,0 +1,213 @@
+{% extends "index.html" %}
+
+{% block head %}
+<style>
+    .meeting-detail {
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .meeting-header {
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .meeting-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 1rem;
+    }
+
+    .meeting-meta {
+        display: flex;
+        gap: 2rem;
+        color: #6b7280;
+        font-size: 0.95rem;
+    }
+
+    .meeting-meta i {
+        margin-right: 0.5rem;
+    }
+
+    .meeting-category {
+        display: inline-block;
+        padding: 0.25rem 1rem;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--primary-color);
+        border-radius: 1rem;
+        font-weight: 500;
+    }
+
+    .meeting-tags {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+
+    .meeting-tag {
+        font-size: 0.875rem;
+        color: #4b5563;
+        padding: 0.25rem 0.75rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+    }
+
+    .meeting-content {
+        margin-top: 2rem;
+    }
+
+    .content-section {
+        margin-bottom: 3rem;
+    }
+
+    .content-section h3 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .content-section h3 i {
+        margin-right: 0.75rem;
+        color: var(--primary-color);
+    }
+
+    .content-text {
+        color: #4b5563;
+        line-height: 1.8;
+        white-space: pre-wrap;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-copy {
+        position: relative;
+    }
+
+    .copy-tooltip {
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1f2937;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .copy-tooltip.show {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="meeting-detail">
+        <div class="meeting-header">
+            <div class="d-flex justify-content-between align-items-start">
+                <h1 class="meeting-title">{{ meeting.title }}</h1>
+                <span class="meeting-category">{{ meeting.category }}</span>
+            </div>
+            <div class="meeting-meta">
+                <span><i class="far fa-calendar"></i>{{ meeting.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% if meeting.updated_at %}
+                <span><i class="far fa-edit"></i>최종 수정: {{ meeting.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% endif %}
+            </div>
+            {% if meeting.tags %}
+            <div class="meeting-tags">
+                {% for tag in meeting.tags.split(',') %}
+                <span class="meeting-tag">{{ tag.strip() }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="meeting-content">
+            <div class="content-section">
+                <h3><i class="fas fa-file-alt"></i>회의록 전문</h3>
+                <div class="content-text">{{ meeting.original_content }}</div>
+                <button class="btn btn-outline-primary btn-copy mt-3" onclick="copyContent('original')">
+                    <i class="far fa-copy me-2"></i>전문 복사
+                    <span class="copy-tooltip">복사되었습니다!</span>
+                </button>
+            </div>
+
+            <div class="content-section">
+                <h3><i class="fas fa-list"></i>회의 요약</h3>
+                <div class="content-text">{{ meeting.summarized_content }}</div>
+                <button class="btn btn-outline-primary btn-copy mt-3" onclick="copyContent('summary')">
+                    <i class="far fa-copy me-2"></i>요약 복사
+                    <span class="copy-tooltip">복사되었습니다!</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <a href="/meetings" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>목록으로
+            </a>
+            <button onclick="deleteMeeting({{ meeting.id }})" class="btn btn-danger">
+                <i class="fas fa-trash me-2"></i>삭제
+            </button>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function copyContent(type) {
+    const content = type === 'original' 
+        ? document.querySelector('.content-section:first-child .content-text').textContent
+        : document.querySelector('.content-section:last-child .content-text').textContent;
+    
+    navigator.clipboard.writeText(content).then(() => {
+        const button = document.querySelector(`button[onclick="copyContent('${type}')"]`);
+        const tooltip = button.querySelector('.copy-tooltip');
+        tooltip.classList.add('show');
+        setTimeout(() => tooltip.classList.remove('show'), 2000);
+    }).catch(err => {
+        console.error('복사 실패:', err);
+        alert('내용을 복사하는데 실패했습니다.');
+    });
+}
+
+async function deleteMeeting(meetingId) {
+    if (!confirm('정말로 이 회의록을 삭제하시겠습니까?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/meetings/${meetingId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            window.location.href = '/meetings';
+        } else {
+            throw new Error(data.message || '회의록 삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('회의록 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
+{% endblock %} 

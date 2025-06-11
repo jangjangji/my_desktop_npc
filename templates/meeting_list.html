@@ -1,0 +1,259 @@
+{% extends "index.html" %}
+
+{% block head %}
+<style>
+    .meeting-card {
+        transition: all 0.3s ease;
+        border: none;
+        border-radius: 1rem;
+        overflow: hidden;
+    }
+
+    .meeting-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .meeting-content {
+        padding: 1.5rem;
+    }
+
+    .meeting-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 1rem;
+        line-height: 1.4;
+    }
+
+    .meeting-summary {
+        color: #6b7280;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .meeting-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .meeting-date {
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    .meeting-category {
+        font-size: 0.875rem;
+        color: var(--primary-color);
+        font-weight: 500;
+        padding: 0.25rem 0.75rem;
+        background: rgba(99, 102, 241, 0.1);
+        border-radius: 1rem;
+    }
+
+    .meeting-tags {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+    }
+
+    .meeting-tag {
+        font-size: 0.75rem;
+        color: #4b5563;
+        padding: 0.25rem 0.5rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+    }
+
+    .filters {
+        background: white;
+        padding: 1rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .pagination {
+        margin-top: 2rem;
+        justify-content: center;
+    }
+
+    .page-link {
+        border: none;
+        margin: 0 0.25rem;
+        border-radius: 0.5rem;
+        color: #4b5563;
+        transition: all 0.2s ease;
+    }
+
+    .page-link:hover {
+        background-color: var(--primary-color);
+        color: white;
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--primary-color);
+        border: none;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        color: #d1d5db;
+        margin-bottom: 1.5rem;
+    }
+
+    .empty-state h3 {
+        font-size: 1.5rem;
+        color: #374151;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state p {
+        color: #6b7280;
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <h1 class="text-4xl font-bold text-gray-800 floating">회의록 목록</h1>
+        <a href="/meeting" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>새 회의록 작성
+        </a>
+    </div>
+
+    <!-- 필터 -->
+    <div class="filters">
+        <form class="row g-3" method="GET">
+            <div class="col-md-4">
+                <label class="form-label">카테고리</label>
+                <select name="category" class="form-select">
+                    <option value="">전체</option>
+                    <option value="team">팀 미팅</option>
+                    <option value="project">프로젝트 회의</option>
+                    <option value="client">고객 미팅</option>
+                    <option value="other">기타</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">태그 검색</label>
+                <input type="text" name="tag" class="form-control" placeholder="태그 입력...">
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-2"></i>검색
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 회의록 목록 -->
+    <div class="row g-4">
+        {% if meetings %}
+            {% for meeting in meetings %}
+            <div class="col-lg-4 col-md-6">
+                <div class="meeting-card glass-effect">
+                    <div class="meeting-content">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h3 class="meeting-title">{{ meeting.title }}</h3>
+                            <span class="meeting-category">{{ meeting.category }}</span>
+                        </div>
+                        <p class="meeting-summary">{{ meeting.summarized_content }}</p>
+                        {% if meeting.tags %}
+                        <div class="meeting-tags">
+                            {% for tag in meeting.tags.split(',') %}
+                            <span class="meeting-tag">{{ tag.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="meeting-meta">
+                            <span class="meeting-date">{{ meeting.created_at.astimezone(seoul_tz).strftime('%Y-%m-%d %H:%M') }}</span>
+                            <div class="d-flex gap-2">
+                                <a href="/meetings/{{ meeting.id }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <button onclick="deleteMeeting({{ meeting.id }})" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="empty-state">
+                    <i class="far fa-file-alt"></i>
+                    <h3>저장된 회의록이 없습니다</h3>
+                    <p>새로운 회의록을 작성해보세요.</p>
+                    <a href="/meeting" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>회의록 작성하기
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- 페이지네이션 -->
+    {% if total_pages > 1 %}
+    <nav>
+        <ul class="pagination">
+            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                <a class="page-link" href="?page={{ page - 1 }}&category={{ category }}&tag={{ tag }}">이전</a>
+            </li>
+            {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+                <a class="page-link" href="?page={{ p }}&category={{ category }}&tag={{ tag }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                <a class="page-link" href="?page={{ page + 1 }}&category={{ category }}&tag={{ tag }}">다음</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+async function deleteMeeting(meetingId) {
+    if (!confirm('정말로 이 회의록을 삭제하시겠습니까?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/meetings/${meetingId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            throw new Error(data.message || '회의록 삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('회의록 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
+{% endblock %} 
