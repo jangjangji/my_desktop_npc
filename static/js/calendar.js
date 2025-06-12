@@ -16,22 +16,28 @@ function formatToDateTimeLocal(date) {
 }
 
 // 일정 목록 새로고침
-async function refreshEvents() {
+window.refreshEvents = async function() {
     const eventsContainer = document.getElementById('events-container');
+    console.log('refreshEvents 호출됨, eventsContainer:', eventsContainer); // 디버깅용 로그
+    
     // events-container가 없으면 (다른 페이지인 경우) 함수 실행을 중단
     if (!eventsContainer) {
+        console.log('events-container를 찾을 수 없음'); // 디버깅용 로그
         return;
     }
 
     try {
+        console.log('일정 데이터 요청 시작'); // 디버깅용 로그
         const response = await fetch('/calendar/today');
         if (!response.ok) {
             throw new Error('일정 조회 실패');
         }
 
         const data = await response.json();
+        console.log('받은 일정 데이터:', data); // 디버깅용 로그
         
         if (Array.isArray(data) && data.length > 0) {
+            console.log('일정 데이터 렌더링 시작'); // 디버깅용 로그
             const eventsHtml = data.map(event => `
                 <div class="col-12 event-item" data-event-id="${event.id}">
                     <div class="card" style="border-left: 5px solid ${event.color};">
@@ -70,7 +76,9 @@ async function refreshEvents() {
             `).join('');
             
             eventsContainer.innerHTML = eventsHtml;
+            console.log('일정 데이터 렌더링 완료'); // 디버깅용 로그
         } else {
+            console.log('표시할 일정 없음'); // 디버깅용 로그
             eventsContainer.innerHTML = `
                 <div class="col-12">
                     <div class="card">
@@ -84,6 +92,17 @@ async function refreshEvents() {
         }
     } catch (error) {
         console.error('일정 목록 새로고침 실패:', error);
+        eventsContainer.innerHTML = `
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center text-danger">
+                        <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                        <p class="card-text">일정을 불러오는 중 오류가 발생했습니다.</p>
+                        <p class="card-text"><small>${error.message}</small></p>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 }
 

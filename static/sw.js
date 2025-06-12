@@ -4,35 +4,55 @@ const CACHE_NAME = 'calendar-cache-v1';
 
 // 서비스 워커 설치
 self.addEventListener('install', (event) => {
-    console.log('Service Worker 설치됨');
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll([
-                '/',
-                '/static/js/notifications.js',
-                '/static/calendar-icon.png'
-            ]);
-        })
-    );
+    console.log('서비스 워커 설치됨');
     self.skipWaiting();
 });
 
 // 서비스 워커 활성화
 self.addEventListener('activate', (event) => {
-    console.log('Service Worker 활성화됨');
-    event.waitUntil(
-        Promise.all([
-            clients.claim(),
-            // 이전 캐시 삭제
-            caches.keys().then(keys => Promise.all(
-                keys.map(key => {
-                    if (key !== CACHE_NAME) {
-                        return caches.delete(key);
-                    }
-                })
-            ))
-        ])
-    );
+    console.log('서비스 워커 활성화됨');
+    event.waitUntil(clients.claim());
+});
+
+// 메시지 처리
+self.addEventListener('message', (event) => {
+    console.log('메시지 받음:', event.data);
+    
+    if (event.data.type === 'SCHEDULE_NOTIFICATION') {
+        const { title, body, timestamp } = event.data;
+        
+        // 현재 시간과 알림 예정 시간의 차이 계산
+        const now = Date.now();
+        const delay = timestamp - now;
+        
+        // 알림 예약
+        if (delay > 0) {
+            setTimeout(() => {
+                self.registration.showNotification(title, {
+                    body: body,
+                    icon: '/static/calendar-icon.png',
+                    badge: '/static/calendar-icon.png',
+                    requireInteraction: true,
+                    silent: false,
+                    vibrate: [200, 100, 200],
+                    tag: `calendar-notification-${Date.now()}`
+                }).then(() => {
+                    console.log('알림 표시됨:', title);
+                    // 클라이언트에게 알림 표시 완료 메시지 전송
+                    self.clients.matchAll().then(clients => {
+                        clients.forEach(client => {
+                            client.postMessage({
+                                type: 'NOTIFICATION_SHOWN',
+                                notification: { title, timestamp }
+                            });
+                        });
+                    });
+                });
+            }, delay);
+            
+            console.log(`알림 예약됨: ${title}, ${delay}ms 후 표시`);
+        }
+    }
 });
 
 // 알림 클릭 처리
@@ -41,16 +61,13 @@ self.addEventListener('notificationclick', (event) => {
     
     event.notification.close();
     
-    // 메인 창 열기 또는 포커스
     event.waitUntil(
-        clients.matchAll({type: 'window'}).then(windowClients => {
-            // 이미 열린 창이 있는지 확인
-            for (let client of windowClients) {
+        clients.matchAll({ type: 'window' }).then(clientList => {
+            for (const client of clientList) {
                 if (client.url === '/' && 'focus' in client) {
                     return client.focus();
                 }
             }
-            // 열린 창이 없으면 새 창 열기
             if (clients.openWindow) {
                 return clients.openWindow('/');
             }

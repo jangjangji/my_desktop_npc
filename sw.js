@@ -4,26 +4,28 @@ const CACHE_NAME = 'calendar-cache-v1';
 
 // 서비스 워커 설치
 self.addEventListener('install', (event) => {
-    console.log('Service Worker 설치됨');
+    console.log('서비스 워커가 설치되었습니다.');
     self.skipWaiting();
 });
 
 // 서비스 워커 활성화
 self.addEventListener('activate', (event) => {
-    console.log('Service Worker 활성화됨');
+    console.log('서비스 워커가 활성화되었습니다.');
     event.waitUntil(clients.claim());
 });
+
+// 알림 예약 관리
+const scheduledNotifications = new Map();
 
 // 알림 클릭 처리
 self.addEventListener('notificationclick', (event) => {
     console.log('알림 클릭됨:', event.notification.title);
     event.notification.close();
-    
-    // 메인 창 열기 또는 포커스
+
     event.waitUntil(
-        clients.matchAll({type: 'window'}).then(windowClients => {
-            for (let client of windowClients) {
-                if (client.url === '/' && 'focus' in client) {
+        clients.matchAll({ type: 'window' }).then(clientList => {
+            for (const client of clientList) {
+                if (client.url && 'focus' in client) {
                     return client.focus();
                 }
             }
@@ -37,44 +39,67 @@ self.addEventListener('notificationclose', (event) => {
     console.log('알림 닫힘:', event.notification.title);
 });
 
-// 메시지 처리
+// 메시지 수신 처리
 self.addEventListener('message', (event) => {
-    console.log('메시지 받음:', event.data);
-    
     if (event.data.type === 'SCHEDULE_NOTIFICATION') {
         const { title, body, timestamp } = event.data;
-        
-        // 현재 시간과 알림 예정 시간의 차이 계산
         const now = Date.now();
-        const delay = timestamp - now;
-        
-        // 알림 예약
-        if (delay > 0) {
-            setTimeout(() => {
-                self.registration.showNotification(title, {
+        const delay = Math.max(0, timestamp - now);
+
+        console.log(`서비스 워커 알림 예약: ${title}, ${Math.round(delay/1000/60)}분 후`);
+
+        // 기존 알림 취소
+        const existingTimeout = scheduledNotifications.get(title);
+        if (existingTimeout) {
+            clearTimeout(existingTimeout);
+            console.log('기존 알림 취소:', title);
+        }
+
+        // 새 알림 예약
+        const timeoutId = setTimeout(async () => {
+            try {
+                console.log('알림 표시 시도:', title);
+                await self.registration.showNotification(title, {
                     body: body,
                     icon: '/static/calendar-icon.png',
                     badge: '/static/calendar-icon.png',
                     requireInteraction: true,
                     vibrate: [200, 100, 200],
                     tag: `calendar-notification-${Date.now()}`
-                }).then(() => {
-                    console.log('알림 표시됨:', title);
-                    // 클라이언트에게 알림 표시 완료 메시지 전송
-                    self.clients.matchAll().then(clients => {
-                        clients.forEach(client => {
-                            client.postMessage({
-                                type: 'NOTIFICATION_SHOWN',
-                                notification: { title, timestamp }
-                            });
-                        });
+                });
+
+                console.log('알림 표시 성공:', title);
+                scheduledNotifications.delete(title);
+
+                // 클라이언트에 알림 표시 알림
+                const clients = await self.clients.matchAll();
+                clients.forEach(client => {
+                    client.postMessage({
+                        type: 'NOTIFICATION_SHOWN',
+                        notification: { title, body }
                     });
                 });
-            }, delay);
-            
-            console.log(`알림 예약됨: ${title}, ${delay}ms 후 표시`);
-        } else {
-            console.log('지난 알림은 표시하지 않음:', title);
-        }
+            } catch (error) {
+                console.error('알림 표시 실패:', error);
+                // 실패 시 재시도
+                setTimeout(async () => {
+                    try {
+                        await self.registration.showNotification(title, {
+                            body: body,
+                            icon: '/static/calendar-icon.png',
+                            badge: '/static/calendar-icon.png',
+                            requireInteraction: true,
+                            vibrate: [200, 100, 200],
+                            tag: `calendar-notification-retry-${Date.now()}`
+                        });
+                        console.log('알림 재시도 성공:', title);
+                    } catch (retryError) {
+                        console.error('알림 재시도 실패:', retryError);
+                    }
+                }, 1000);
+            }
+        }, delay);
+
+        scheduledNotifications.set(title, timeoutId);
     }
 }); 

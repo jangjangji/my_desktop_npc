@@ -53,63 +53,67 @@ def get_today_events():
     # 캘린더 목록 가져오기
     calendar_colors = {}
     calendar_list = service.calendarList().list().execute()
+    
+    formatted_events = []
+    
+    # 각 캘린더별로 일정 조회
     for calendar in calendar_list.get('items', []):
-        calendar_colors[calendar['id']] = {
+        calendar_id = calendar['id']
+        calendar_colors[calendar_id] = {
             'backgroundColor': calendar.get('backgroundColor', '#039BE5'),
             'summary': calendar.get('summary', '기본 캘린더')
         }
+        
+        # 일정 요청
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=start.isoformat(),
+            timeMax=end.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
 
-    # 일정 요청
-    events_result = service.events().list(
-        calendarId='primary',
-        timeMin=start.isoformat(),
-        timeMax=end.isoformat(),
-        singleEvents=True,
-        orderBy='startTime'
-    ).execute()
+        events = events_result.get('items', [])
 
-    events = events_result.get('items', [])
+        def format_event_time(time_str):
+            if not time_str:
+                return None
+            # UTC 시간을 KST로 변환
+            dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            dt_kst = dt.astimezone(KST)
+            return dt_kst.isoformat()
 
-    if not events:
+        for event in events:
+            # 알림 설정 가져오기
+            reminder_minutes = 10  # 기본값
+            if 'reminders' in event:
+                if not event['reminders'].get('useDefault', True):
+                    overrides = event['reminders'].get('overrides', [])
+                    if overrides:
+                        # 팝업 알림 설정 찾기
+                        for override in overrides:
+                            if override.get('method') == 'popup':
+                                reminder_minutes = override.get('minutes', 10)
+                                break
+                # 기본 알림 설정 사용
+                else:
+                    reminder_minutes = 10
+
+            formatted_event = {
+                "id": event['id'],
+                "title": event.get("summary", "제목 없음"),
+                "start_time": format_event_time(event['start'].get('dateTime', event['start'].get('date'))),
+                "end_time": format_event_time(event['end'].get('dateTime', event['end'].get('date'))),
+                "description": event.get("description", ""),
+                "calendar_id": calendar_id,
+                "calendar_name": calendar_colors[calendar_id]["summary"],
+                "color": calendar_colors[calendar_id]["backgroundColor"],
+                "reminder_minutes": reminder_minutes
+            }
+            formatted_events.append(formatted_event)
+
+    if not formatted_events:
         return "오늘 일정은 없습니다."
-
-    def format_event_time(time_str):
-        if not time_str:
-            return None
-        # UTC 시간을 KST로 변환
-        dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-        dt_kst = dt.astimezone(KST)
-        return dt_kst.isoformat()
-
-    formatted_events = []
-    for event in events:
-        # 알림 설정 가져오기
-        reminder_minutes = 10  # 기본값
-        if 'reminders' in event:
-            if not event['reminders'].get('useDefault', True):
-                overrides = event['reminders'].get('overrides', [])
-                if overrides:
-                    # 팝업 알림 설정 찾기
-                    for override in overrides:
-                        if override.get('method') == 'popup':
-                            reminder_minutes = override.get('minutes', 10)
-                            break
-            # 기본 알림 설정 사용
-            else:
-                reminder_minutes = 10
-
-        formatted_event = {
-            "id": event['id'],
-            "title": event.get("summary", "제목 없음"),
-            "start_time": format_event_time(event['start'].get('dateTime', event['start'].get('date'))),
-            "end_time": format_event_time(event['end'].get('dateTime', event['end'].get('date'))),
-            "description": event.get("description", ""),
-            "calendar_id": event.get("organizer", {}).get("email", "primary"),
-            "calendar_name": calendar_colors.get(event.get("organizer", {}).get("email", "primary"), {}).get("summary", "기본 캘린더"),
-            "color": calendar_colors.get(event.get("organizer", {}).get("email", "primary"), {}).get("backgroundColor", "#039BE5"),
-            "reminder_minutes": reminder_minutes
-        }
-        formatted_events.append(formatted_event)
 
     return formatted_events
 
@@ -177,11 +181,12 @@ def create_calendar_event(calendar_id='primary', title=None, start_time=None, en
         if attendees:
             event['attendees'] = [{'email': attendee} for attendee in attendees]
 
-        # 알림 설정
+        # 알림 설정 (팝업과 이메일 모두 설정)
         event['reminders'] = {
             'useDefault': False,
             'overrides': [
-                {'method': 'popup', 'minutes': reminder_minutes}
+                {'method': 'popup', 'minutes': reminder_minutes},
+                {'method': 'email', 'minutes': reminder_minutes}
             ]
         }
 
@@ -190,7 +195,7 @@ def create_calendar_event(calendar_id='primary', title=None, start_time=None, en
         event = service.events().insert(
             calendarId=calendar_id,
             body=event,
-            sendUpdates='all'
+            sendUpdates='all'  # 이메일 알림 보내기
         ).execute()
 
         return {

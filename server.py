@@ -26,6 +26,10 @@ def add_header(response):
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
+    # 보안 헤더 추가
+    response.headers['Permissions-Policy'] = 'notifications=*, push=*'
+    response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
     return response
 
 @app.route('/sw.js')
